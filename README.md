@@ -1,5 +1,8 @@
 # X Marketplace Seller MCP
 
+**Live MCP URL (Streamable HTTP):** `https://x-marketplace-seller-mcp.vercel.app/mcp`  
+Health check: `https://x-marketplace-seller-mcp.vercel.app/health`
+
 A selling assistant for X (Twitter). It covers:
 
 - Drafting listing posts (text, pricing, photos list).
@@ -76,3 +79,10 @@ Posting is optional. To enable it, set `X_USER_ACCESS_TOKEN` (env, or the `x-x-u
 - There's no X DM inbox reading. Paste buyer messages in.
 
 MIT License © 2026 Segun Cole
+
+
+## Storage and tenant isolation
+
+- **Hosted:** data is kept in a private **Vercel Blob** store (free Hobby quota) when `BLOB_READ_WRITE_TOKEN` is set, at `<app>/<tenant>/<file>.json`, with ETag-based optimistic concurrency.
+- **Tenant key:** a one-way SHA-256 hash of the caller's own credential headers, or of an `x-user-key` header if you send one (recommended if your token rotates). Secrets are never stored and tenants can't see each other's data. Callers with no credentials and no `x-user-key` share a `public-demo` space, so don't put real data there.
+- **Local / self-hosted:** without a Blob token it falls back to JSON files under `DATA_DIR` (default `~/.x-marketplace-seller-mcp/<tenant>/`).

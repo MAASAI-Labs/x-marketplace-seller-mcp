@@ -1,11 +1,15 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createServer, CRED_HEADERS } from "./server.js";
+import { tenantId, withTenant } from "./store.js";
+
+/** Credentials that identify a tenant (hashed, never stored). An explicit `x-user-key` header takes precedence. */
+export const TENANT_FIELDS = ["X_USER_ACCESS_TOKEN"];
 
 /** Stateless Streamable HTTP handler: one server+transport per request (serverless friendly). */
 export async function handleMcp(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", ["content-type", "mcp-session-id", "mcp-protocol-version", "authorization", ...Object.keys(CRED_HEADERS)].join(", "));
+  res.setHeader("Access-Control-Allow-Headers", ["content-type", "mcp-session-id", "mcp-protocol-version", "authorization", "x-user-key", ...Object.keys(CRED_HEADERS)].join(", "));
   res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
   if (req.method === "OPTIONS") { res.statusCode = 204; return res.end(); }
   if (req.method !== "POST") {
@@ -18,12 +22,16 @@ export async function handleMcp(req: IncomingMessage & { body?: unknown }, res: 
     const raw = Buffer.concat(chunks).toString("utf8");
     try { body = raw ? JSON.parse(raw) : undefined; } catch { res.statusCode = 400; return res.end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" }, id: null })); }
   }
-  // Per-request end-user credentials (hosted mode): each user sends their OWN keys as headers; nothing is stored.
+  // Per-request end-user credentials (hosted mode): each user sends their OWN keys as headers; credentials are never stored; data is kept per tenant (hash of the credentials).
   const creds: Record<string, string> = {};
   for (const [h, envName] of Object.entries(CRED_HEADERS)) { const v = req.headers[h]; if (typeof v === "string" && v) creds[envName] = v; }
   const server = createServer(creds);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on("close", () => { transport.close(); server.close(); });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, body);
+  const userKey = typeof req.headers["x-user-key"] === "string" ? req.headers["x-user-key"] : undefined;
+  const tenant = userKey ? tenantId({ userKey }) : tenantId(Object.fromEntries(TENANT_FIELDS.map(f => [f, creds[f]])));
+  await withTenant(tenant, async () => {
+    await server.connect(transport);
+    await transport.handleRequest(req, res, body);
+  });
 }

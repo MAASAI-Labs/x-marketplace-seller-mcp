@@ -26,6 +26,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@vercel/blob": "^2.8.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {
