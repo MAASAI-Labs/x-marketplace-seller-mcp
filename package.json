@@ -1,0 +1,44 @@
+{
+  "name": "x-marketplace-seller-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for selling on X: listings, buyer-reply drafts, a floor/ceiling negotiation engine, pickup/delivery drafts and a deal ledger. Every send, post or deal acceptance needs human approval.",
+  "main": "dist/main-http.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main-http.js",
+    "start:stdio": "node dist/main-stdio.js",
+    "dev": "tsx src/main-http.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "keywords": [
+    "mcp",
+    "x",
+    "marketplace",
+    "negotiation",
+    "selling"
+  ],
+  "author": "Segun Cole",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "x-marketplace-seller-mcp": "dist/main-stdio.js"
+  }
+}

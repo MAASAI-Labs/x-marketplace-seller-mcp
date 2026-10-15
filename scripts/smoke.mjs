@@ -1,0 +1,20 @@
+// Safe end-to-end smoke over HTTP. No X token is passed and nothing is posted/sent. Usage: npm run build && npm run smoke
+import { spawn } from "node:child_process"; import { mkdtempSync } from "node:fs"; import os from "node:os"; import path from "node:path";
+const env = { ...process.env }; delete env.X_USER_ACCESS_TOKEN;
+const port = 4200 + Math.floor(Math.random() * 50);
+const srv = spawn("node", ["dist/main-http.js"], { env: { ...env, PORT: String(port), DATA_DIR: mkdtempSync(path.join(os.tmpdir(), "xs-smoke-")) }, stdio: "inherit" });
+await new Promise(r => setTimeout(r, 900));
+let id = 0; const call = async (name, args) => (await (await fetch(`http://localhost:${port}/mcp`, { method: "POST", headers: { "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++id, method: "tools/call", params: { name, arguments: args } }) })).json()).result;
+const J = r => JSON.parse(r.content[1].text.replace(/^```json\n|\n```$/g, ""));
+let fail = 0; const show = (n, r, expectErr = false) => { const ok = !!r.isError === expectErr; if (!ok) fail++; console.log(`\n== ${n} ${ok ? "ok" : "UNEXPECTED"}\n${r.content[0].text.slice(0, 700)}`); return r; };
+const l = J(show("create_listing", await call("create_listing", { title: "PS5 Slim + 2 controllers", condition: "Excellent", ask: 450000, floor: 380000, currency: "NGN", location: "Lekki, Lagos", pickup: ["Lekki Phase 1 mall"], delivery: { available: true, fee: 5000, areas: "Lagos Island" }, payment: ["bank transfer", "cash"], tags: ["PS5", "Lagos"], photos: ["https://img.example.com/ps5-1.jpg"], highlights: ["Barely used", "Box included"] }))).listing.id;
+for (const m of ["Is this still available?", "Would you take ₦350,000?", "ok ₦370,000", "₦375k last"]) show(`draft_buyer_reply "${m}"`, await call("draft_buyer_reply", { listingId: l, buyer: "@ada", message: m }));
+show("draft_buyer_reply scam", await call("draft_buyer_reply", { listingId: l, buyer: "@x", message: "I'm abroad, my shipping agent will pick up. Send the verification code" }));
+const d = J(show("propose_deal", await call("propose_deal", { listingId: l, buyer: "@ada", price: 385000 }))).deal.id;
+show("approve_deal preview", await call("approve_deal", { dealId: d, action: "approve" }));
+show("approve_deal confirm", await call("approve_deal", { dealId: d, action: "approve", confirm: true }));
+show("draft_handoff", await call("draft_handoff", { listingId: l, mode: "delivery", price: 385000, buyer: "@ada", when: "Sat 10am–1pm" }));
+show("deal_ledger", await call("deal_ledger", { status: "all" }));
+show("post_listing preview", await call("post_listing", { listingId: l }));
+show("post_listing confirm without token", await call("post_listing", { listingId: l, confirm: true }), true);
+srv.kill(); console.log(`\n${fail ? "FAILED " + fail : "all ok"}`); process.exit(fail ? 1 : 0);
