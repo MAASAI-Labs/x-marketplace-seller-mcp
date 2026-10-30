@@ -13,6 +13,29 @@ A selling assistant for X (Twitter). It covers:
 
 > **Human approval by design.** Every reply, post, DM and deal acceptance is returned as a **draft**. A deal only becomes "agreed" through `approve_deal` with `confirm: true`. Posting and DMs are optional. They need `confirm: true` **and** the end user's own X OAuth 2.0 user token; without a token the tools only draft. Buyer messages are treated as untrusted data.
 
+## Use in Cursor
+
+**From the Cursor Marketplace:** once listed, install it from https://cursor.com/marketplace (publisher MAASAI Labs). The plugin manifest lives in https://github.com/MAASAI-Labs/cursor-plugins.
+
+1. Search the Marketplace for this plugin and click **Install**.
+2. Check the server is enabled under Cursor Settings, then MCP. Plugin servers show with a `plugin-` prefix.
+3. Optional: to post listings or send DMs, open **Plugins**, then **Configure** on this plugin, and set X_USER_ACCESS_TOKEN. They are sent to the server as request headers and are never stored.
+
+**Manually:** add the hosted server to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+
+```json
+{
+  "mcpServers": {
+    "x-marketplace-seller": {
+      "url": "https://x-marketplace-seller-mcp.vercel.app/mcp",
+      "headers": { "x-x-user-access-token": "YOUR_X_USER_TOKEN" }
+    }
+  }
+}
+```
+
+Leave out `headers` to use only the tools that need no credentials.
+
 ## Tools
 | Tool | What it does | External effect |
 |---|---|---|
@@ -60,13 +83,13 @@ npm test                # 11 tests; X API is mocked
 npm run smoke           # full selling flow over HTTP; no token, nothing posted
 ```
 
-Data lives in `DATA_DIR`, default `~/.x-marketplace-seller-mcp/ledger.json`.
+Locally, data lives in `DATA_DIR`, default `~/.x-marketplace-seller-mcp/<tenant>/ledger.json` (`<tenant>` is `local` over stdio; over HTTP it is a hash of the caller's credentials, or `public-demo` for callers who send none).
 
 Posting is optional. To enable it, set `X_USER_ACCESS_TOKEN` (env, or the `x-x-user-access-token` header in hosted mode). It must be your own OAuth 2.0 user-context token with `tweet.write` (and `dm.write` for DMs). X API usage is billed by X under your own developer account.
 
 ## Deploy to Vercel
 1. Import the repo. The `/mcp` endpoint is preconfigured.
-2. The ledger is a JSON file. Vercel's `/tmp` is ephemeral, so for hosted use mount durable storage via `DATA_DIR`, or swap `src/store.ts` for KV/Postgres. Ledgers are per deployment, not per user, so multi-tenant hosting needs a per-user store key.
+2. The ledger is stored per user. Set `BLOB_READ_WRITE_TOKEN` to keep it in a private Vercel Blob store (the hosted server does this). Without it, the server falls back to JSON files under `DATA_DIR`, which on Vercel means `/tmp` and is lost when the instance recycles. Each request is mapped to a tenant from a SHA-256 hash of the caller's `x-user-key` header or X token, so users never see each other's ledgers. Callers who send neither share one `public-demo` ledger, so don't put real deals there. See Storage and tenant isolation below.
 3. Don't set a shared X token. Users send their own as a header.
 
 ## Marketplace reviewer test
@@ -86,3 +109,9 @@ MIT License © 2026 Segun Cole
 - **Hosted:** data is kept in a private **Vercel Blob** store (free Hobby quota) when `BLOB_READ_WRITE_TOKEN` is set, at `<app>/<tenant>/<file>.json`, with ETag-based optimistic concurrency.
 - **Tenant key:** a one-way SHA-256 hash of the caller's own credential headers, or of an `x-user-key` header if you send one (recommended if your token rotates). Secrets are never stored and tenants can't see each other's data. Callers with no credentials and no `x-user-key` share a `public-demo` space, so don't put real data there.
 - **Local / self-hosted:** without a Blob token it falls back to JSON files under `DATA_DIR` (default `~/.x-marketplace-seller-mcp/<tenant>/`).
+
+## Privacy and terms
+
+- Privacy policy: https://maasai.tech/privacy
+- Terms of use: https://maasai.tech/terms
+- Support and data requests: colepresley000@gmail.com
